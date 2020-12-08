@@ -340,6 +340,7 @@ def interface_pantry(id:int):
     status when exiting this interface
     '''
     pantry = get_pantry_by_id(id)
+    print()
     print("========PANTRY==DETAIL========")
     display_pantry_detail(pantry)
     
