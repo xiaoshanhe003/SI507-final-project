@@ -160,7 +160,7 @@ def build_states():
     '''
     conn = sqlite3.connect(DBNAME)
     cur = conn.cursor()
-    init_states(conn)
+    init_states()
 
     url = "https://www.foodpantries.org/"
 
@@ -253,11 +253,16 @@ def build_pantries():
     conn = sqlite3.connect(DBNAME)
     cur = conn.cursor()
     init_pantries()
+    CACHE_DICT = open_cache()
     query_cities = '''
         SELECT City.id,City.url,State.name FROM City
         INNER JOIN State ON City.state_id=State.id
-        WHERE State.name IN("michigan","alaska","florida")
+        WHERE State.name IN("michigan","alaska","florida","california","delaware","georgia","ohio","texas")
     '''
+    # query_cities = '''
+    #     SELECT City.id,City.url,State.name FROM City
+    #     INNER JOIN State ON City.state_id=State.id
+    # '''
     cities = cur.execute(query_cities).fetchall()
     for record in cities:
         city_url = record[1]
@@ -269,65 +274,63 @@ def build_pantries():
             print("Fetching")
             page = requests.get(city_url).content.decode("utf8","ignore")
             CACHE_DICT[city_url] = page
+            save_cache(CACHE_DICT)
         
         soup = BeautifulSoup(page,'html.parser')
         lists = soup.findAll('ul',{'class':'blog-list'})
-        for pantry_list in lists:
-            titles = pantry_list.findAll('h2')
-            paras = pantry_list.findAll('p') #all paragraphs
-            for index,item in enumerate(titles):
-                a = item.find("a")
-                if a:
-                    name = a.text.lower()
-                    if len(name)==0:
-                        continue
-                    name = base64.b64encode(bytes(name, 'utf-8'))
-                    
+        if len(lists) == 0:
+            continue
+        pantry_list = lists[0]
+        titles = pantry_list.findAll('h2')
+        paras = pantry_list.findAll('p') #all paragraphs
+        for index,item in enumerate(titles):
+            a = item.find("a")
+            if a:
+                name = a.text.lower()
+                if len(name)==0:
+                    continue
+                name = base64.b64encode(bytes(name, 'utf-8'))
+                
+                try:
+                    url = a.attrs["href"]
+                except:
+                    url = ""
+                try:
+                    des = paras[ 2*index + 1 ].text.strip()
+                    des = base64.b64encode(bytes(des, 'utf-8'))
+                except:
+                    des = ""
+                try:
+                    rows = paras[ 2*index ].text.split('\n')
                     try:
-                        url = a.attrs["href"]
-                    except:
-                        url = ""
-                    try:
-                        des = paras[ 2*index + 1 ].text.strip()
-                        des = base64.b64encode(bytes(des, 'utf-8'))
-                    except:
-                        des = ""
-                    try:
-                        rows = paras[ 2*index ].text.split('\n')
-                        try:
-                            post = re.search(r'[0-9]{5}',rows[2].strip())
-                            post = post.group() if post!=None else ""
-                        except:
-                            post = ""
-                        try:
-                            phone = rows[3].strip()
-                        except:
-                            phone = ""
+                        post = re.search(r'[0-9]{5}',rows[2].strip())
+                        post = post.group() if post!=None else ""
                     except:
                         post = ""
-                        phone = ""
-                        
-                    query = f'''
-                        INSERT INTO Pantry (name,description,post,city_id,url,phone) 
-                        VALUES("{name}","{des}","{post}","{city_id}","{url}","{phone}");
-                    '''
                     try:
-                        cur.execute(query)
-                        conn.commit()
+                        phone = rows[3].strip()
                     except:
-                        print("-------")
-                        print(query)
-                        print("-------")
-                        return False
+                        phone = ""
+                except:
+                    post = ""
+                    phone = ""
+                    
+                query = f'''
+                    INSERT INTO Pantry (name,description,post,city_id,url,phone) 
+                    VALUES("{name}","{des}","{post}","{city_id}","{url}","{phone}");
+                '''
+                try:
+                    cur.execute(query)
+                    conn.commit()
+                except:
+                    print("-------")
+                    print(query)
+                    print("-------")
+                    return False
     
-    save_cache(CACHE_DICT) 
     conn.close()
 
 if __name__ == "__main__":
-    # print(build_cities_states(conn))
-    # states = build_states(conn)
-    # build_cities(conn)
-    # url = "https://www.foodpantries.org/ci/ak-wasilla"
-    # print(pantry(url))
+    # build_states()
+    # build_cities()
     build_pantries()
-    
